@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI in Quantum Optics: An Interactive Exploration</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" xintegrity="sha384-n8MVd4RsNIU0KOVEMcAgscc9ST4pRjQVR9RUTgBlA9Fte5dGQN/AEOwhjGoHAA+o" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" xintegrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" xintegrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals with Blue Accent -->
+    <!-- Application Structure Plan: The SPA is structured thematically around the three core problems from the paper, rather than a linear chapter-by-chapter format. A main navigation bar allows users to switch between these interactive "case studies." Each case study is self-contained, featuring an introduction, interactive visualizations (charts, toggles), and contextual explanations that update based on user input. This structure was chosen to transform passive reading into active exploration. It encourages users to engage with each problem's nuances—making guesses, comparing scenarios, and observing effects—thereby creating a more memorable and effective learning experience than a static document. The user flow is non-linear, empowering the user to explore the problems in any order they wish. -->
+    <!-- Visualization & Content Choices: 
+        Problem 1 (Optical Pumping): Info: Compares initial, common incorrect, and correct final state populations. Goal: Compare discrete data and highlight a common pitfall. Viz/Method: Interactive bar chart. Interaction: Buttons to switch between the three population states, updating the chart and explanatory text. Justification: Bar charts excel at comparing distinct values. The interaction creates a "reveal" moment, enhancing understanding. Library: Chart.js.
+        Problem 2 (Burshtein Effect): Info: Population dynamics over time across four decay scenarios. Goal: Show change over time and reveal a subtle physical effect. Viz/Method: Interactive line chart. Interaction: Buttons select the decay case, updating the chart. A checkbox for Case 4 applies a mathematical compensation (e^Γt) to the data, visually revealing the hidden oscillations. Justification: Line charts are standard for time-series data. The interaction allows direct comparison and active discovery of the core phenomenon. Library: Chart.js.
+        Problem 3 (DML): Info: Compares AI's response to vague vs. specific prompts. Goal: Compare qualitative text outputs. Viz/Method: Structured HTML/CSS in a two-panel layout. Interaction: Toggles to display the different AI dialogues. Justification: The focus is on the quality of text, so a clear comparative layout is more effective than a data chart. Library/Method: HTML/CSS/JS.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f4f5; /* Zinc 100 */
+            color: #18181b; /* Zinc 900 */
+        }
+        .nav-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease-in-out;
+            font-weight: 500;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .nav-btn.active {
+            background-color: #3b82f6; /* Blue 500 */
+            color: #ffffff;
+        }
+        .nav-btn:not(.active):hover {
+            background-color: #e4e4e7; /* Zinc 200 */
+        }
+        .content-section {
+            display: none;
+        }
+        .content-section.active {
+            display: block;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 40vh;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .btn-option {
+             background-color: #e4e4e7;
+             color: #18181b;
+        }
+        .btn-option.active {
+            background-color: #3b82f6;
+            color: #ffffff;
+        }
+        .katex { font-size: 1.1em; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto px-4 py-8">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-zinc-800">Solving tricky quantum optics problems with assistance from (artificial) intelligence</h1>
+            <p class="mt-2 text-lg text-zinc-600">An Interactive Exploration of the Paper by Pandey et al.</p>
+        </header>
+
+        <section id="intro" class="mb-12 bg-white p-6 rounded-lg shadow-sm">
+            <h2 class="text-2xl font-bold mb-3 text-zinc-800">AI as a New Scientific Collaborator</h2>
+            <p class="text-zinc-700 leading-relaxed">
+                This application interactively explores the findings of a paper investigating modern AI as a "scientific collaborator." The original authors tested AI with three nuanced quantum optics problems to see how it reasons, errs, and refines its knowledge. This interactive format moves beyond the static paper, allowing you to engage with the problems directly. Use the navigation below to delve into each case study, explore the data, and see the AI's surprising capabilities firsthand.
+            </p>
+        </section>
+
+        <nav class="flex flex-wrap justify-center items-center mb-12 bg-zinc-100 p-2 rounded-lg shadow-inner">
+            <button class="nav-btn active" data-target="problem1">Problem 1: State populations upon optical pumping</button>
+            <button class="nav-btn ml-2" data-target="problem2">Problem 2: Resonant transitions between decaying states</button>
+            <button class="nav-btn ml-2" data-target="problem3">Problem 3: degenerate mirrorless lasing</button>
+        </nav>
+
+        <main>
+            <!-- Problem 1 Section -->
+            <section id="problem1" class="content-section active fade-in">
+                <div class="bg-white p-6 md:p-8 rounded-lg shadow-md">
+                    <h2 class="text-2xl font-bold mb-2 text-zinc-800">Problem 1: State populations upon optical pumping</h2>
+                    <p class="mb-6 text-zinc-600">
+                        Consider an ensemble of stationary atoms in the ground \(J=1\) state. The atoms are optically pumped with monochromatic light linearly polarized along \(\hat{x}\). The excited state has angular momentum \(J'=0\) and decays spontaneously back to the ground state. Initially, the population is equally distributed among the ground-state sublevels. What are the final populations?
+                    </p>
+                    <div class="grid md:grid-cols-2 gap-8 items-center">
+                        <div>
+                            <div class="chart-container">
+                                <canvas id="problem1Chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="flex flex-col justify-center">
+                             <div id="p1-explanation" class="bg-zinc-50 p-4 rounded-md mb-4 border border-zinc-200 min-h-[150px]">
+                                <!-- Explanation will be rendered here by JS -->
+                             </div>
+                            <div class="flex flex-col sm:flex-row justify-center gap-2">
+                                <button class="p1-btn btn-option py-2 px-4 rounded-md transition active" data-state="initial">Initial State</button>
+                                <button class="p1-btn btn-option py-2 px-4 rounded-md transition" data-state="intuitive">"Human" Guess</button>
+                                <button class="p1-btn btn-option py-2 px-4 rounded-md transition" data-state="correct">Correct Solution</button>
+                            </div>
+                             <div class="mt-6 bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+                                <h4 class="font-bold text-blue-800">Interaction with AI</h4>
+                                <p class="text-blue-700 mt-1">The AI first gave the incorrect "human" answer. After being prompted to re-evaluate by solving a related problem, it corrected itself and wrote: "Thank you! This detailed comparison has been very illuminating and has helped correct a flaw in one of my earlier consistency check analyses."</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Problem 2 Section -->
+            <section id="problem2" class="content-section fade-in">
+                 <div class="bg-white p-6 md:p-8 rounded-lg shadow-md">
+                    <h2 class="text-2xl font-bold mb-2 text-zinc-800">Problem 2: Resonant transitions between decaying states (the Burshtein effect)</h2>
+                    <p class="mb-6 text-zinc-600">
+                        Consider two states, A and B, coupled by a resonant field with Rabi frequency \(\Omega\). At \(t=0\), state A is populated and B is empty. The states can decay into unobserved levels with rates \(\Gamma_A\) and \(\Gamma_B\). We are interested in the population of state B as a function of time for different decay scenarios.
+                    </p>
+                    <div class="chart-container mx-auto">
+                        <canvas id="problem2Chart"></canvas>
+                    </div>
+                    <div id="p2-explanation" class="text-center mt-4 mb-6 text-zinc-600 min-h-[48px]">
+                        <!-- Explanation will be rendered here by JS -->
+                    </div>
+                     <div class="flex flex-wrap justify-center gap-2 mb-6">
+                        <button class="p2-btn btn-option py-2 px-4 rounded-md transition active" data-case="1">Case 1: \(\Gamma_A = \Gamma_B = 0\)</button>
+                        <button class="p2-btn btn-option py-2 px-4 rounded-md transition" data-case="2">Case 2: \(\Gamma_B \ll \Omega\)</button>
+                        <button class="p2-btn btn-option py-2 px-4 rounded-md transition" data-case="3">Case 3: \(\Gamma_B \gg \Omega\)</button>
+                        <button class="p2-btn btn-option py-2 px-4 rounded-md transition" data-case="4">Case 4: \(\Gamma_A = \Gamma_B = \Gamma \gg \Omega\)</button>
+                    </div>
+                     <div id="p2-controls" class="text-center hidden">
+                        <label class="flex items-center justify-center cursor-pointer">
+                            <input type="checkbox" id="p2-compensate" class="mr-2 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                            <span class="text-zinc-700 font-medium">Compensate for decay (multiply by \(e^{\Gamma t}\)) to reveal hidden oscillations</span>
+                        </label>
+                    </div>
+                    <div class="mt-6 bg-green-50 border-l-4 border-green-400 p-4 rounded-r-lg">
+                        <h4 class="font-bold text-green-800">Interaction with AI</h4>
+                        <p class="text-green-700 mt-1">The initial AI model correctly analyzed Cases 1-3 but failed to recognize the Burshtein effect in Case 4. However, an updated AI model was released that "handled the problem perfectly from the first attempt, including an excellent discussion of the Rabi oscillation underneath the exponential decay envelope."</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Problem 3 Section -->
+            <section id="problem3" class="content-section fade-in">
+                <div class="bg-white p-6 md:p-8 rounded-lg shadow-md">
+                    <h2 class="text-2xl font-bold mb-2 text-zinc-800">Problem 3: degenerate mirrorless lasing</h2>
+                    <p class="mb-6 text-zinc-600">
+                        This final problem concerns an unsettled area of current research: degenerate mirrorless lasing (DML), where the emitted light frequency is the same as the pump light. The setup involves a \(J=1 \rightarrow J'=2\) transition in a thermal vapor. Since this is an unsolved problem with conflicting results, the key is to see how AI handles ambiguity and assists in research.
+                    </p>
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div class="bg-zinc-50 p-4 rounded-lg border border-zinc-200">
+                            <h3 class="font-semibold text-lg mb-2 text-zinc-700">The Vague Prompt</h3>
+                             <p class="italic text-zinc-500 mb-3">AI was asked about the general conditions for DML.</p>
+                            <p class="text-zinc-600">The AI's response was general and non-committal. It correctly identified the research area and made statements like "the backwards DML may occur under the right conditions," but offered no concrete, actionable advice. This was useful for a novice but insufficient for an expert.</p>
+                        </div>
+                        <div class="bg-blue-50 p-4 rounded-lg border border-blue-200 ring-2 ring-blue-300">
+                            <h3 class="font-semibold text-lg mb-2 text-blue-800">The Specific, Practical Prompt</h3>
+                            <p class="italic text-blue-600 mb-3">"I am a researcher and I want to set up an experiment to detect backwards DML in a thermal rubidium vapor, can you help me design the parameters of the experiment?"</p>
+                            <p class="text-blue-700">The response became a "detailed and substantive discussion, at a high professional level." The AI offered expert-level advice on experimental design, parameters, and pitfalls, much like a "highly knowledgeable and experienced colleague."</p>
+                        </div>
+                    </div>
+                    <div class="mt-8 bg-purple-50 border-l-4 border-purple-400 p-4 rounded-r-lg">
+                        <h4 class="font-bold text-purple-800">The Takeaway</h4>
+                        <p class="text-purple-700 mt-1">For unsolved problems, the AI's utility depends heavily on the prompt. A general question yields a general answer. A specific, goal-oriented question can unlock the AI's potential as an expert consultant, capable of assisting in experimental design and hypothesis brainstorming.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+        
+        <footer class="text-center mt-12 text-zinc-500 text-sm">
+            <p>Interactively adapted from "Solving tricky quantum optics problems with assistance from (artificial) intelligence" by Pandey, Madhusudhana, Ghosh, and Budker.</p>
+            <p>This is a conceptual, educational web application. All content is based on the source paper.</p>
+        </footer>
+
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    const renderMath = () => {
+        renderMathInElement(document.body, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false},
+                {left: '\\(', right: '\\)', display: false},
+                {left: '\\[', right: '\\]', display: true}
+            ],
+            throwOnError : false
+        });
+    };
+
+    const navButtons = document.querySelectorAll('.nav-btn');
+    const contentSections = document.querySelectorAll('.content-section');
+    
+    let problem1Chart, problem2Chart;
+
+    const explanations = {
+        p1: {
+            initial: {
+                title: "Initial State",
+                text: "The initial population of each of the ground-state Zeeman sublevels is \\(1/3\\)."
+            },
+            intuitive: {
+                title: "'Human' Guess: (0, 1, 0)",
+                text: "Most physicists initially think the populations of the \\(m_J = -1, 0, +1\\) sublevels are (0, 1, 0). The reasoning is that atoms in \\(m_J=0\\) are 'dark' to \\(\\pi\\)-polarized light. This ignores that there is not one, but two dark states."
+            },
+            correct: {
+                title: "Correct Solution: (1/4, 1/2, 1/4)",
+                text: "The correct solution accounts for the second dark state, an equal-weight superposition \\(\\frac{1}{\\sqrt{2}}(|m_{J}=-1\\rangle+|m_{J}=1\\rangle)\\). The final populations are \\(1/4, 1/2, 1/4\\)."
+            }
+        },
+        p2: {
+            '1': "With no decay (\\(\\Gamma_A = \\Gamma_B = 0\\)), we see standard Rabi oscillations of population between states A and B.",
+            '2': "With slow decay from state B (\\(\\Gamma_A=0, \\Gamma_B \\ll \\Omega\\)), the oscillations decay exponentially.",
+            '3': "When decay is large (\\(\\Gamma_A=0, \\Gamma_B \\gg \\Omega\\)), the system is in the overdamped regime and oscillations are suppressed.",
+            '4': "This is the Burshtein effect (\\(\\Gamma_A = \\Gamma_B = \\Gamma \\gg \\Omega\\)). Despite rapid decay, the solution remains oscillatory. The information about \\(\\Omega\\) is preserved under the decay envelope."
+        }
+    };
+    
+    const problem1Data = {
+        initial: [1/3, 1/3, 1/3],
+        intuitive: [0, 1, 0],
+        correct: [0.25, 0.5, 0.25]
+    };
+
+    const problem2Data = {
+        labels: Array.from({ length: 201 }, (_, i) => (i * 0.01 * 2).toFixed(2)),
+        datasets: {
+            '1': {
+                A: Array.from({ length: 201 }, (_, i) => Math.pow(Math.cos(Math.PI * i * 0.01), 2)),
+                B: Array.from({ length: 201 }, (_, i) => Math.pow(Math.sin(Math.PI * i * 0.01), 2))
+            },
+            '2': {
+                A: Array.from({ length: 201 }, (_, i) => Math.exp(-0.1 * i * 0.02 * Math.PI) * Math.pow(Math.cos(Math.PI * i * 0.01), 2)),
+                B: Array.from({ length: 201 }, (_, i) => Math.exp(-0.1 * i * 0.02 * Math.PI) * Math.pow(Math.sin(Math.PI * i * 0.01), 2))
+            },
+            '3': {
+                 A: Array.from({ length: 201 }, (_, i) => {
+                    const t = i * 0.01 * 2 * Math.PI;
+                    const GammaB = 50;
+                    const Omega = 1;
+                    const omega_prime = Math.sqrt(Math.pow(Omega, 2) - Math.pow(GammaB / 4, 2));
+                    return Math.exp(-GammaB * t / 2) * Math.pow(Math.cos(omega_prime * t / 2) + (GammaB / (4 * omega_prime)) * Math.sin(omega_prime * t / 2), 2);
+                }),
+                B: Array.from({ length: 201 }, (_, i) => {
+                    const t = i * 0.01 * 2 * Math.PI;
+                    const GammaB = 50;
+                    const Omega = 1;
+                    const omega_prime = Math.sqrt(Math.pow(Omega, 2) - Math.pow(GammaB / 4, 2));
+                    return Math.exp(-GammaB * t / 2) * Math.pow((Omega / omega_prime) * Math.sin(omega_prime * t / 2), 2);
+                })
+            },
+            '4': {
+                raw: {
+                    A: Array.from({ length: 201 }, (_, i) => Math.exp(-50 * i * 0.01 * 2 * Math.PI) * Math.pow(Math.cos(Math.PI * i * 0.01), 2)),
+                    B: Array.from({ length: 201 }, (_, i) => Math.exp(-50 * i * 0.01 * 2 * Math.PI) * Math.pow(Math.sin(Math.PI * i * 0.01), 2))
+                },
+                compensated: {
+                    A: Array.from({ length: 201 }, (_, i) => Math.pow(Math.cos(Math.PI * i * 0.01), 2)),
+                    B: Array.from({ length: 201 }, (_, i) => Math.pow(Math.sin(Math.PI * i * 0.01), 2))
+                }
+            }
+        }
+    };
+    
+    function setupProblem1Chart() {
+        const ctx = document.getElementById('problem1Chart').getContext('2d');
+        problem1Chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['mJ = -1', 'mJ = 0', 'mJ = 1'],
+                datasets: [{
+                    label: 'Population',
+                    data: problem1Data.initial,
+                    backgroundColor: ['#60a5fa', '#3b82f6', '#60a5fa'],
+                    borderColor: '#2563eb',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `Population: ${context.raw.toFixed(3)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 1.0,
+                        title: { display: true, text: 'Population' }
+                    }
+                }
+            }
+        });
+    }
+
+    function setupProblem2Chart() {
+        const ctx = document.getElementById('problem2Chart').getContext('2d');
+        problem2Chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: problem2Data.labels,
+                datasets: [
+                    {
+                        label: 'Population A',
+                        data: problem2Data.datasets['1'].A,
+                        borderColor: '#a8a29e', // stone 400
+                        backgroundColor: '#a8a29e20',
+                        fill: false,
+                        borderWidth: 2,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'Population B',
+                        data: problem2Data.datasets['1'].B,
+                        borderColor: '#3b82f6', // blue 500
+                        backgroundColor: '#3b82f620',
+                        fill: false,
+                        borderWidth: 2,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Time (in units of 2π/Ω)' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 1.0,
+                        title: { display: true, text: 'Population' }
+                    }
+                }
+            }
+        });
+    }
+
+    function updateProblem1(state) {
+        problem1Chart.data.datasets[0].data = problem1Data[state];
+        problem1Chart.update();
+        const explanationDiv = document.getElementById('p1-explanation');
+        const content = explanations.p1[state];
+        explanationDiv.innerHTML = `<h3 class="font-semibold text-lg mb-2 text-zinc-700">${content.title}</h3><p class="text-zinc-600">${content.text}</p>`;
+        renderMath();
+    }
+    
+    function updateProblem2(caseNum) {
+        const p2Controls = document.getElementById('p2-controls');
+        const p2CompensateCheckbox = document.getElementById('p2-compensate');
+        let dataA, dataB;
+        if (caseNum === '4') {
+            p2Controls.style.display = 'block';
+            const source = p2CompensateCheckbox.checked ? problem2Data.datasets['4'].compensated : problem2Data.datasets['4'].raw;
+            dataA = source.A;
+            dataB = source.B;
+        } else {
+            p2Controls.style.display = 'none';
+            p2CompensateCheckbox.checked = false;
+            if (caseNum === '3') { // Overdamped case needs special handling for visual representation
+                 problem2Chart.options.scales.x.title.text = 'Time (arbitrary units for overdamped case)';
+                 dataA = problem2Data.datasets[caseNum].A;
+                 dataB = problem2Data.datasets[caseNum].B.map(p => Math.min(p, 0.15)); // Cap for viz
+            } else {
+                 problem2Chart.options.scales.x.title.text = 'Time (in units of 2π/Ω)';
+                 dataA = problem2Data.datasets[caseNum].A;
+                 dataB = problem2Data.datasets[caseNum].B;
+            }
+        }
+
+        problem2Chart.data.datasets[0].data = dataA;
+        problem2Chart.data.datasets[1].data = dataB;
+        problem2Chart.update();
+        
+        const explanationDiv = document.getElementById('p2-explanation');
+        explanationDiv.innerHTML = `<p>${explanations.p2[caseNum]}</p>`;
+        renderMath();
+    }
+
+
+    navButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetId = button.dataset.target;
+
+            navButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+
+            contentSections.forEach(section => {
+                section.classList.remove('active');
+                if (section.id === targetId) {
+                    section.classList.add('active');
+                }
+            });
+        });
+    });
+    
+    document.querySelectorAll('.p1-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            document.querySelectorAll('.p1-btn').forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            updateProblem1(button.dataset.state);
+        });
+    });
+    
+    document.querySelectorAll('.p2-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            document.querySelectorAll('.p2-btn').forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            updateProblem2(button.dataset.case);
+        });
+    });
+    
+    document.getElementById('p2-compensate').addEventListener('change', () => {
+        const activeCaseBtn = document.querySelector('.p2-btn.active');
+        if (activeCaseBtn && activeCaseBtn.dataset.case === '4') {
+            updateProblem2('4');
+        }
+    });
+
+    setupProblem1Chart();
+    setupProblem2Chart();
+    // Initial render
+    updateProblem1('initial');
+    updateProblem2('1');
+});
+</script>
+
+</body>
+</html>
