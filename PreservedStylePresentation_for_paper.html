@@ -260,20 +260,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 B: Array.from({ length: 201 }, (_, i) => Math.exp(-0.1 * i * 0.02 * Math.PI) * Math.pow(Math.sin(Math.PI * i * 0.01), 2))
             },
             '3': {
-                 A: Array.from({ length: 201 }, (_, i) => {
-                    const t = i * 0.01 * 2 * Math.PI;
-                    const GammaB = 50;
-                    const Omega = 1;
-                    const omega_prime = Math.sqrt(Math.pow(Omega, 2) - Math.pow(GammaB / 4, 2));
-                    return Math.exp(-GammaB * t / 2) * Math.pow(Math.cos(omega_prime * t / 2) + (GammaB / (4 * omega_prime)) * Math.sin(omega_prime * t / 2), 2);
-                }),
-                B: Array.from({ length: 201 }, (_, i) => {
-                    const t = i * 0.01 * 2 * Math.PI;
-                    const GammaB = 50;
-                    const Omega = 1;
-                    const omega_prime = Math.sqrt(Math.pow(Omega, 2) - Math.pow(GammaB / 4, 2));
-                    return Math.exp(-GammaB * t / 2) * Math.pow((Omega / omega_prime) * Math.sin(omega_prime * t / 2), 2);
-                })
+                A: Array.from({ length: 201 }, (_, i) => Math.exp(-25 * i * 0.01 * 2)),
+                B: Array.from({ length: 201 }, (_, i) => (1/49**2) * Math.exp(-25 * i * 0.01 * 2) * (1-Math.cos(49 * Math.PI * i * 0.01 * 2)))
             },
             '4': {
                 raw: {
