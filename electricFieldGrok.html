@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Electric Field Animation for 6-Wire High-Voltage Transmission Line</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.js"></script>
+</head>
+<body>
+    <script>
+        // Positions of the conductors in meters (x, y), with y=0 at ground
+        let positions = [
+            [-4, 20], [-4, 15], [-4, 10],  // Left circuit: A, B, C
+            [4, 20], [4, 15], [4, 10]     // Right circuit: A, B, C
+        ];
+
+        // Precomputed inverse of the potential coefficient matrix P
+        let invP = [
+            [7.80650147e-12, -1.50840492e-12, -5.73668416e-13, -1.06809230e-12, -6.72535566e-13, -3.50466270e-13],
+            [-1.50840492e-12, 8.23065779e-12, -1.33810640e-12, -6.72535566e-13, -7.32221612e-13, -5.29136296e-13],
+            [-5.73668416e-13, -1.33810640e-12, 8.24999036e-12, -3.50466270e-13, -5.29136296e-13, -6.96220811e-13],
+            [-1.06809230e-12, -6.72535566e-13, -3.50466270e-13, 7.80650147e-12, -1.50840492e-12, -5.73668416e-13],
+            [-6.72535566e-13, -7.32221612e-13, -5.29136296e-13, -1.50840492e-12, 8.23065779e-12, -1.33810640e-12],
+            [-3.50466270e-13, -5.29136296e-13, -6.96220811e-13, -5.73668416e-13, -1.33810640e-12, 8.24999036e-12]
+        ];
+
+        // Physical constants
+        let eps0 = 8.85e-12;  // Permittivity of free space (F/m)
+
+        // Line parameters
+        let V_line_rms = 220000;  // Line-to-line RMS voltage (V), typical for such configurations
+        let V_peak = V_line_rms / Math.sqrt(3) * Math.sqrt(2);  // Peak phase voltage (~179,605 V)
+        let frequency = 60;  // Hz
+        let omega = 2 * Math.PI * frequency;
+
+        // Time variables
+        let t = 0;
+        let dt = 1 / (frequency * 30);  // Time step for smooth animation (faster than real-time)
+
+        // Visualization parameters
+        let scale = 20;  // Pixels per meter
+        let x_offset = 400;  // Canvas center x
+        let y_offset = 500;  // Ground y position (y increases downward in p5.js)
+        let grid_step = 2;  // Grid spacing in meters for field vectors
+        let arrow_max_len = 20;  // Maximum arrow length in pixels
+        let E_scale = 10000;  // Scaling factor for arrow length (adjust based on typical E ~1-10 kV/m)
+
+        // Matrix-vector multiplication
+        function matVecMul(mat, vec) {
+            let res = new Array(6).fill(0);
+            for (let i = 0; i < 6; i++) {
+                for (let j = 0; j < 6; j++) {
+                    res[i] += mat[i][j] * vec[j];
+                }
+            }
+            return res;
+        }
+
+        // Compute electric field E at point (x, y) given charges lambda
+        function computeE(x, y, lambda) {
+            let Ex = 0;
+            let Ey = 0;
+            for (let k = 0; k < 6; k++) {
+                let px = positions[k][0];
+                let py = positions[k][1];
+
+                // Contribution from real conductor
+                let dx = x - px;
+                let dy = y - py;
+                let r2 = dx * dx + dy * dy;
+                if (r2 < 1e-6) continue;  // Avoid singularity at conductor
+                let contrib = lambda[k] / (2 * Math.PI * eps0 * r2);
+                Ex += contrib * dx;
+                Ey += contrib * dy;
+
+                // Contribution from image conductor (at -y)
+                let pyi = -py;
+                dx = x - px;
+                dy = y - pyi;
+                r2 = dx * dx + dy * dy;
+                if (r2 < 1e-6) continue;
+                contrib = -lambda[k] / (2 * Math.PI * eps0 * r2);
+                Ex += contrib * dx;
+                Ey += contrib * dy;
+            }
+            return [Ex, Ey];
+        }
+
+        function setup() {
+            createCanvas(800, 600);
+            frameRate(30);
+        }
+
+        function draw() {
+            background(255);
+
+            // Draw ground
+            stroke(0);
+            fill(200);
+            rect(0, y_offset, width, height - y_offset);  // Shaded ground
+
+            // Draw conductors (small circles)
+            fill(0);
+            for (let pos of positions) {
+                let px = x_offset + pos[0] * scale;
+                let py = y_offset - pos[1] * scale;
+                circle(px, py, 5);
+            }
+
+            // Compute instantaneous voltages
+            let Va = V_peak * Math.cos(omega * t);
+            let Vb = V_peak * Math.cos(omega * t - (2 * Math.PI / 3));
+            let Vc = V_peak * Math.cos(omega * t - (4 * Math.PI / 3));
+            let V = [Va, Vb, Vc, Va, Vb, Vc];  // Same phasing for both circuits
+
+            // Compute charges lambda = invP * V
+            let lambda = matVecMul(invP, V);
+
+            // Draw electric field vectors on a grid
+            for (let gx = -20; gx <= 20; gx += grid_step) {
+                for (let gy = 1; gy <= 25; gy += grid_step) {  // Start above ground
+                    let [Ex, Ey] = computeE(gx, gy, lambda);
+                    let Emag = Math.sqrt(Ex * Ex + Ey * Ey);
+                    if (Emag === 0) continue;
+
+                    let dirx = Ex / Emag;
+                    let diry = Ey / Emag;
+                    let len = arrow_max_len * (Emag / E_scale);
+                    if (len > arrow_max_len) len = arrow_max_len;
+
+                    // Color based on magnitude (blue low, red high)
+                    let col = map(Math.log(Emag), Math.log(100), Math.log(1e5), 0, 255);
+                    stroke(255 - col, 0, col);
+
+                    let px = x_offset + gx * scale;
+                    let py = y_offset - gy * scale;
+                    line(px, py, px + len * dirx, py - len * diry);  // y inverted in p5.js
+                }
+            }
+
+            // Update time
+            t += dt;
+        }
+    </script>
+    <p>Copy and paste this HTML code into a file (e.g., animation.html) and open it in a web browser to view the animation. The electric field vectors update over time, showing the time-varying field due to the AC voltages. Arrows are colored from blue (low magnitude) to red (high magnitude). This uses the p5.js framework for animation and is based on the quasi-static approximation with the method of images for scientific accuracy.</p>
+</body>
+</html>
