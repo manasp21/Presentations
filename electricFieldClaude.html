@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>6-Wire Transmission Line Electric Field Visualization</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        canvas {
+            border: 1px solid #333;
+            display: block;
+            margin: 20px auto;
+            background-color: #000;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .info {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .parameter {
+            display: inline-block;
+            margin: 10px 20px;
+        }
+        input[type="range"] {
+            width: 200px;
+            vertical-align: middle;
+        }
+        .value-display {
+            display: inline-block;
+            width: 80px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Electric Field Visualization: 6-Wire High-Voltage Transmission Line</h1>
+
+```
+    <canvas id="fieldCanvas" width="1000" height="600"></canvas>
+    
+    <div class="controls">
+        <button id="playPauseBtn">Pause</button>
+        <button id="resetBtn">Reset</button>
+        
+        <div class="parameter">
+            <label for="voltageSlider">Peak Voltage (kV):</label>
+            <input type="range" id="voltageSlider" min="100" max="765" value="345" step="5">
+            <span class="value-display" id="voltageValue">345</span>
+        </div>
+        
+        <div class="parameter">
+            <label for="frequencySlider">Frequency (Hz):</label>
+            <input type="range" id="frequencySlider" min="50" max="60" value="60" step="1">
+            <span class="value-display" id="frequencyValue">60</span>
+        </div>
+        
+        <div class="parameter">
+            <label for="fieldDensitySlider">Field Line Density:</label>
+            <input type="range" id="fieldDensitySlider" min="10" max="50" value="30" step="5">
+            <span class="value-display" id="fieldDensityValue">30</span>
+        </div>
+    </div>
+    
+    <div class="info">
+        <h3>Technical Details</h3>
+        <p><strong>Configuration:</strong> Double-circuit three-phase transmission line (6 conductors)</p>
+        <p><strong>Mathematical Model:</strong> Electric field calculated using superposition principle with time-varying potentials:</p>
+        <p style="font-family: monospace; margin-left: 20px;">
+            E(r,t) = -∇V(r,t) = Σᵢ (qᵢ(t) / 4πε₀) · (r - rᵢ) / |r - rᵢ|³
+        </p>
+        <p><strong>Phase Arrangement:</strong> Phases A, B, C with 120° separation per circuit</p>
+        <p><strong>Time:</strong> <span id="timeDisplay">0.000</span> seconds | <strong>Field Magnitude:</strong> <span id="fieldMagnitude">0.0</span> kV/m (max)</p>
+    </div>
+</div>
+
+<script>
+    // Physical constants and parameters
+    const EPSILON_0 = 8.854e-12; // Permittivity of free space (F/m)
+    const TWO_PI = 2 * Math.PI;
+    
+    // Canvas setup
+    const canvas = document.getElementById('fieldCanvas');
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    
+    // Animation state
+    let animationId;
+    let isPaused = false;
+    let time = 0;
+    
+    // Electrical parameters
+    let peakVoltage = 345000; // Volts (345 kV default)
+    let frequency = 60; // Hz
+    let omega = TWO_PI * frequency; // Angular frequency
+    
+    // Transmission line configuration
+    // Typical 345 kV double-circuit configuration
+    const conductors = [
+        // Circuit 1 (left side)
+        { x: -12, y: -20, phase: 0 },      // Phase A1
+        { x: -12, y: -10, phase: 120 },    // Phase B1
+        { x: -12, y: 0, phase: 240 },      // Phase C1
+        // Circuit 2 (right side)
+        { x: 12, y: -20, phase: 0 },       // Phase A2
+        { x: 12, y: -10, phase: 120 },     // Phase B2
+        { x: 12, y: 0, phase: 240 }        // Phase C2
+    ];
+    
+    // Convert conductor positions to screen coordinates
+    const scale = 10; // pixels per meter
+    const centerX = width / 2;
+    const centerY = height / 2 + 100;
+    
+    // Field calculation parameters
+    let fieldLineCount = 30;
+    const maxFieldStrength = 100; // kV/m for visualization scaling
+    
+    // Helper functions
+    function degreesToRadians(degrees) {
+        return degrees * Math.PI / 180;
+    }
+    
+    // Calculate electric field at a point due to all conductors
+    function calculateElectricField(x, y, t) {
+        let Ex = 0, Ey = 0;
+        
+        conductors.forEach(conductor => {
+            // Convert to real coordinates
+            const dx = (x - centerX) / scale - conductor.x;
+            const dy = (y - centerY) / scale - conductor.y;
+            const r2 = dx * dx + dy * dy;
+            
+            if (r2 < 0.01) return; // Avoid singularity at conductor
+            
+            const r = Math.sqrt(r2);
+            
+            // Time-varying voltage with phase shift
+            const phaseRad = degreesToRadians(conductor.phase);
+            const voltage = peakVoltage * Math.sin(omega * t + phaseRad);
+            
+            // Simplified field calculation (line charge approximation)
+            // For infinite line charge: E = λ/(2πε₀r) in radial direction
+            // Using voltage instead of charge density for visualization
+            const fieldMagnitude = voltage / (r * 1000); // Convert to kV/m
+            
+            // Field components
+            Ex += fieldMagnitude * dx / r;
+            Ey += fieldMagnitude * dy / r;
+        });
+        
+        return { x: Ex, y: Ey };
+    }
+    
+    // Calculate field magnitude for color mapping
+    function getFieldMagnitude(Ex, Ey) {
+        return Math.sqrt(Ex * Ex + Ey * Ey);
+    }
+    
+    // Color mapping for field strength
+    function getFieldColor(magnitude) {
+        // Normalize to 0-1 range
+        const normalized = Math.min(magnitude / maxFieldStrength, 1);
+        
+        // Color gradient: Blue -> Green -> Yellow -> Red
+        let r, g, b;
+        
+        if (normalized < 0.25) {
+            // Blue to Cyan
+            r = 0;
+            g = normalized * 4 * 255;
+            b = 255;
+        } else if (normalized < 0.5) {
+            // Cyan to Green
+            r = 0;
+            g = 255;
+            b = (1 - (normalized - 0.25) * 4) * 255;
+        } else if (normalized < 0.75) {
+            // Green to Yellow
+            r = (normalized - 0.5) * 4 * 255;
+            g = 255;
+            b = 0;
+        } else {
+            // Yellow to Red
+            r = 255;
+            g = (1 - (normalized - 0.75) * 4) * 255;
+            b = 0;
+        }
+        
+        return `rgb(${Math.floor(r)}, ${Math.floor(g)}, ${Math.floor(b)})`;
+    }
+    
+    // Draw field lines using streamline tracing
+    function drawFieldLines() {
+        ctx.globalAlpha = 0.7;
+        
+        // Starting points for field lines (around conductors)
+        for (let i = 0; i < fieldLineCount; i++) {
+            const angle = (i / fieldLineCount) * TWO_PI;
+            
+            conductors.forEach((conductor, index) => {
+                // Start slightly away from conductor
+                const startX = centerX + (conductor.x + 2 * Math.cos(angle)) * scale;
+                const startY = centerY + (conductor.y + 2 * Math.sin(angle)) * scale;
+                
+                // Trace field line
+                traceFieldLine(startX, startY, 200);
+            });
+        }
+        
+        ctx.globalAlpha = 1;
+    }
+    
+    // Trace a single field line using Runge-Kutta integration
+    function traceFieldLine(startX, startY, steps) {
+        let x = startX;
+        let y = startY;
+        const dt = 2; // Integration step size in pixels
+        
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        
+        for (let i = 0; i < steps; i++) {
+            const field = calculateElectricField(x, y, time);
+            const magnitude = getFieldMagnitude(field.x, field.y);
+            
+            if (magnitude < 0.1 || x < 0 || x > width || y < 0 || y > height) break;
+            
+            // Normalize field direction
+            const dx = (field.x / magnitude) * dt;
+            const dy = (field.y / magnitude) * dt;
+            
+            // Move along field line
+            x += dx;
+            y += dy;
+            
+            ctx.lineTo(x, y);
+        }
+        
+        // Color based on average field strength
+        const field = calculateElectricField(startX, startY, time);
+        const magnitude = getFieldMagnitude(field.x, field.y);
+        ctx.strokeStyle = getFieldColor(magnitude);
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+    
+    // Draw field magnitude as background heatmap
+    function drawFieldHeatmap() {
+        const imageData = ctx.createImageData(width, height);
+        const data = imageData.data;
+        const step = 4; // Sample every 4 pixels for performance
+        
+        let maxMag = 0;
+        
+        for (let y = 0; y < height; y += step) {
+            for (let x = 0; x < width; x += step) {
+                const field = calculateElectricField(x, y, time);
+                const magnitude = getFieldMagnitude(field.x, field.y);
+                maxMag = Math.max(maxMag, magnitude);
+                
+                const color = getFieldColor(magnitude);
+                const rgb = color.match(/\d+/g);
+                
+                // Fill a step x step block
+                for (let dy = 0; dy < step && y + dy < height; dy++) {
+                    for (let dx = 0; dx < step && x + dx < width; dx++) {
+                        const idx = ((y + dy) * width + (x + dx)) * 4;
+                        data[idx] = parseInt(rgb[0]) * 0.3;     // R (dimmed)
+                        data[idx + 1] = parseInt(rgb[1]) * 0.3; // G (dimmed)
+                        data[idx + 2] = parseInt(rgb[2]) * 0.3; // B (dimmed)
+                        data[idx + 3] = 255;                     // A
+                    }
+                }
+            }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        
+        // Update field magnitude display
+        document.getElementById('fieldMagnitude').textContent = maxMag.toFixed(1);
+    }
+    
+    // Draw conductors
+    function drawConductors() {
+        conductors.forEach((conductor, index) => {
+            const x = centerX + conductor.x * scale;
+            const y = centerY + conductor.y * scale;
+            
+            // Draw conductor circle
+            ctx.beginPath();
+            ctx.arc(x, y, 8, 0, TWO_PI);
+            
+            // Color based on instantaneous voltage
+            const phaseRad = degreesToRadians(conductor.phase);
+            const voltage = Math.sin(omega * time + phaseRad);
+            const intensity = (voltage + 1) / 2; // Normalize to 0-1
+            
+            ctx.fillStyle = `rgb(${255 * intensity}, ${100 * intensity}, ${100 * intensity})`;
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Label
+            ctx.fillStyle = '#fff';
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${String.fromCharCode(65 + (index % 3))}${Math.floor(index / 3) + 1}`, x, y + 3);
+        });
+    }
+    
+    // Draw ground plane
+    function drawGroundPlane() {
+        const groundY = centerY + 50;
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, groundY);
+        ctx.lineTo(width, groundY);
+        ctx.stroke();
+        
+        // Ground symbols
+        for (let x = 50; x < width; x += 100) {
+            ctx.beginPath();
+            ctx.moveTo(x - 20, groundY + 10);
+            ctx.lineTo(x + 20, groundY + 10);
+            ctx.moveTo(x - 15, groundY + 20);
+            ctx.lineTo(x + 15, groundY + 20);
+            ctx.moveTo(x - 10, groundY + 30);
+            ctx.lineTo(x + 10, groundY + 30);
+            ctx.stroke();
+        }
+    }
+    
+    // Main animation loop
+    function animate() {
+        if (!isPaused) {
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Draw components
+            drawFieldHeatmap();
+            drawFieldLines();
+            drawGroundPlane();
+            drawConductors();
+            
+            // Update time
+            time += 1 / (60 * 10); // 60 fps, slow motion by factor of 10
+            document.getElementById('timeDisplay').textContent = time.toFixed(3);
+        }
+        
+        animationId = requestAnimationFrame(animate);
+    }
+    
+    // Event handlers
+    document.getElementById('playPauseBtn').addEventListener('click', function() {
+        isPaused = !isPaused;
+        this.textContent = isPaused ? 'Play' : 'Pause';
+    });
+    
+    document.getElementById('resetBtn').addEventListener('click', function() {
+        time = 0;
+        document.getElementById('timeDisplay').textContent = '0.000';
+    });
+    
+    document.getElementById('voltageSlider').addEventListener('input', function() {
+        peakVoltage = this.value * 1000;
+        document.getElementById('voltageValue').textContent = this.value;
+    });
+    
+    document.getElementById('frequencySlider').addEventListener('input', function() {
+        frequency = parseInt(this.value);
+        omega = TWO_PI * frequency;
+        document.getElementById('frequencyValue').textContent = this.value;
+    });
+    
+    document.getElementById('fieldDensitySlider').addEventListener('input', function() {
+        fieldLineCount = parseInt(this.value);
+        document.getElementById('fieldDensityValue').textContent = this.value;
+    });
+    
+    // Start animation
+    animate();
+</script>
+```
+
+</body>
+</html>
